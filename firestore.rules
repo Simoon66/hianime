@@ -1,0 +1,202 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (required, 'admin' or 'user')
+    //   - avatarUrl: string (optional)
+    //   - createdAt: string (required)
+    //
+    // Collection: anime
+    // Document ID: {animeId}
+    // Fields:
+    //   - title: string (required)
+    //   - description: string (required)
+    //   - releaseDate: string (optional)
+    //   - status: string (required, 'Ongoing', 'Completed', 'Upcoming')
+    //   - posterUrl: string (optional)
+    //   - rating: number (optional)
+    //   - genres: list (optional)
+    //   - tags: list (optional)
+    //   - isTrending: boolean (optional)
+    //   - sliderOrder: number (optional)
+    //   - createdAt: string (required)
+    //   - updatedAt: string (required)
+    //
+    // Collection: episodes
+    // Document ID: {episodeId}
+    // Fields:
+    //   - animeId: string (required)
+    //   - episodeNumber: number (required)
+    //   - title: string (required)
+    //   - videoUrl: string (required)
+    //   - duration: number (optional)
+    //   - createdAt: string (required)
+    //
+    // Collection: watchlist
+    // Document ID: {entryId}
+    // Fields:
+    //   - userId: string (required)
+    //   - animeId: string (required)
+    //   - status: string (required, 'Watching', 'Plan to Watch', 'Completed', 'Dropped')
+    //   - episodesWatched: number (required)
+    //   - updatedAt: string (required)
+    //
+    // Collection: comments
+    // Document ID: {commentId}
+    // Fields:
+    //   - userId: string (required)
+    //   - authorName: string (required)
+    //   - authorAvatarUrl: string (optional)
+    //   - episodeId: string (required)
+    //   - content: string (required)
+    //   - isSpoiler: boolean (required)
+    //   - createdAt: string (required)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "kamaluddin124578@gmail.com" && request.auth.token.email_verified == true));
+    }
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Domain Validators
+    function isValidUser() {
+      return hasOnlyAllowedFields(['name', 'email', 'role', 'avatarUrl', 'createdAt']) &&
+             hasRequiredFields(['name', 'email', 'role', 'createdAt']) &&
+             validStringLength('name', 1, 50) &&
+             isValidEmail(request.resource.data.email) &&
+             request.resource.data.role in ['admin', 'user'] &&
+             isValidOptionalString('avatarUrl', 0, 500) &&
+             isValidDateString(request.resource.data.createdAt);
+    }
+
+    function isValidAnime() {
+      return hasOnlyAllowedFields(['title', 'description', 'releaseDate', 'status', 'posterUrl', 'rating', 'genres', 'tags', 'isTrending', 'sliderOrder', 'createdAt', 'updatedAt']) &&
+             hasRequiredFields(['title', 'description', 'status', 'createdAt', 'updatedAt']) &&
+             validStringLength('title', 1, 200) &&
+             validStringLength('description', 1, 5000) &&
+             isValidOptionalString('releaseDate', 0, 50) &&
+             request.resource.data.status in ['Ongoing', 'Completed', 'Upcoming'] &&
+             isValidOptionalString('posterUrl', 0, 500) &&
+             (!( 'rating' in request.resource.data ) || (request.resource.data.rating is number && request.resource.data.rating >= 0 && request.resource.data.rating <= 10)) &&
+             (!( 'genres' in request.resource.data ) || (request.resource.data.genres is list && request.resource.data.genres.size() <= 20)) &&
+             (!( 'tags' in request.resource.data ) || (request.resource.data.tags is list && request.resource.data.tags.size() <= 50)) &&
+             (!( 'isTrending' in request.resource.data ) || request.resource.data.isTrending is bool) &&
+             (!( 'sliderOrder' in request.resource.data ) || request.resource.data.sliderOrder is number) &&
+             isValidDateString(request.resource.data.createdAt) &&
+             isValidDateString(request.resource.data.updatedAt);
+    }
+
+    function isValidEpisode() {
+      return hasOnlyAllowedFields(['animeId', 'episodeNumber', 'title', 'videoUrl', 'duration', 'createdAt']) &&
+             hasRequiredFields(['animeId', 'episodeNumber', 'title', 'videoUrl', 'createdAt']) &&
+             validStringLength('animeId', 1, 100) &&
+             request.resource.data.episodeNumber is number && request.resource.data.episodeNumber >= 0 &&
+             validStringLength('title', 1, 200) &&
+             validStringLength('videoUrl', 1, 500) &&
+             (!( 'duration' in request.resource.data ) || (request.resource.data.duration is number && request.resource.data.duration >= 0)) &&
+             isValidDateString(request.resource.data.createdAt);
+    }
+
+    function isValidWatchlistEntry() {
+      return hasOnlyAllowedFields(['userId', 'animeId', 'status', 'episodesWatched', 'updatedAt']) &&
+             hasRequiredFields(['userId', 'animeId', 'status', 'episodesWatched', 'updatedAt']) &&
+             validStringLength('userId', 1, 100) &&
+             validStringLength('animeId', 1, 100) &&
+             request.resource.data.status in ['Watching', 'Plan to Watch', 'Completed', 'Dropped'] &&
+             request.resource.data.episodesWatched is number && request.resource.data.episodesWatched >= 0 &&
+             isValidDateString(request.resource.data.updatedAt);
+    }
+
+    function isValidComment() {
+      return hasOnlyAllowedFields(['userId', 'authorName', 'authorAvatarUrl', 'episodeId', 'content', 'isSpoiler', 'createdAt']) &&
+             hasRequiredFields(['userId', 'authorName', 'episodeId', 'content', 'isSpoiler', 'createdAt']) &&
+             validStringLength('userId', 1, 100) &&
+             validStringLength('authorName', 1, 50) &&
+             isValidOptionalString('authorAvatarUrl', 0, 500) &&
+             validStringLength('episodeId', 1, 100) &&
+             validStringLength('content', 1, 2000) &&
+             request.resource.data.isSpoiler is bool &&
+             isValidDateString(request.resource.data.createdAt);
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser() && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser() && ((isOwner(userId) && request.resource.data.role == resource.data.role && areImmutableFieldsUnchanged(['createdAt'])) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /anime/{animeId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidAnime();
+      allow update: if isAdmin() && isValidAnime() && areImmutableFieldsUnchanged(['createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    match /episodes/{episodeId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidEpisode();
+      allow update: if isAdmin() && isValidEpisode() && areImmutableFieldsUnchanged(['createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    match /watchlist/{entryId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidWatchlistEntry();
+      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isOwner(request.resource.data.userId) && isValidWatchlistEntry() && areImmutableFieldsUnchanged(['userId', 'animeId']);
+      allow delete: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidComment() && (request.resource.data.authorName == request.auth.token.name || (request.auth.token.name == null && request.resource.data.authorName == 'Anonymous'));
+      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isOwner(request.resource.data.userId) && isValidComment() && areImmutableFieldsUnchanged(['userId', 'episodeId', 'createdAt']);
+      allow delete: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+    }
+  }
+}

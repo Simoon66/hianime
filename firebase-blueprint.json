@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Display name" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role", "createdAt"]
+    },
+    "Anime": {
+      "title": "Anime",
+      "description": "Anime catalog entry",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "releaseDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Ongoing", "Completed", "Upcoming"] },
+        "posterUrl": { "type": "string" },
+        "rating": { "type": "number" },
+        "genres": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "isTrending": { "type": "boolean" },
+        "sliderOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "status", "createdAt", "updatedAt"]
+    },
+    "Episode": {
+      "title": "Episode",
+      "description": "An episode of an anime",
+      "type": "object",
+      "properties": {
+        "animeId": { "type": "string" },
+        "episodeNumber": { "type": "number" },
+        "title": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["animeId", "episodeNumber", "title", "videoUrl", "createdAt"]
+    },
+    "WatchlistEntry": {
+      "title": "Watchlist Entry",
+      "description": "User's progress on an anime",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "animeId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Watching", "Plan to Watch", "Completed", "Dropped"] },
+        "episodesWatched": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "animeId", "status", "episodesWatched", "updatedAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "User comment on an episode",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatarUrl": { "type": "string" },
+        "episodeId": { "type": "string" },
+        "content": { "type": "string" },
+        "isSpoiler": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorName", "episodeId", "content", "isSpoiler", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/anime/{animeId}": {
+      "schema": { "$ref": "#/entities/Anime" },
+      "description": "Anime catalog"
+    },
+    "/episodes/{episodeId}": {
+      "schema": { "$ref": "#/entities/Episode" },
+      "description": "Episodes"
+    },
+    "/watchlist/{entryId}": {
+      "schema": { "$ref": "#/entities/WatchlistEntry" },
+      "description": "User watchlists"
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Episode comments"
+    }
+  }
+}
